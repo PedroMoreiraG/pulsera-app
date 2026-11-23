@@ -285,14 +285,14 @@ async function enviar(cmd) {
 async function leerTexto(ch) { const v = await encolar(() => ch.readValue()); return dec.decode(v); }
 
 // Abre el selector de dispositivos del navegador, mostrando solo los que
-// anuncian nuestro servicio o se llaman "Pulsera...". El navegador exige que
+// anuncian nuestro servicio o se llaman "datAI" (o "Pulsera...", el nombre viejo). El navegador exige que
 // esto arranque con un toque del usuario (por seguridad), por eso va en un boton.
 async function conectar() {
   if (DEMO) return demoConectar();
   if (!navigator.bluetooth) { $('avisoBT').hidden = false; return; }
   try {
     app.dev = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [SRV] }, { namePrefix: 'Pulsera' }], optionalServices: [SRV] });
+      filters: [{ services: [SRV] }, { namePrefix: 'datAI' }, { namePrefix: 'Pulsera' }], optionalServices: [SRV] });
     app.dev.addEventListener('gattserverdisconnected', alDesconectar);
     await conectarGatt();
   } catch (e) {
@@ -318,7 +318,7 @@ async function conectarGatt() {
   await encolar(() => app.ch.est.startNotifications());
   await encolar(() => app.ch.dat.startNotifications());
   app.conectado = true;
-  ui.conn(app.dev.name || 'Pulsera');
+  ui.conn(app.dev.name || 'datAI');
   alEstado(await leerTexto(app.ch.est));
 }
 
@@ -361,7 +361,7 @@ function alEstado(txt) {
   } else if (tipo === 'LIBRE') {
     app.grabando = false;
     if (kv.zancada) $('inZancada').value = kv.zancada;
-    $('infoPulsera').textContent = `${app.dev?.name || 'Pulsera'} · sesión guardada: ${kv.registros || 0} s · paso ${kv.zancada} m`;
+    $('infoPulsera').textContent = `${app.dev?.name || 'datAI'} · sesión guardada: ${kv.registros || 0} s · paso ${kv.zancada} m`;
   } else if (tipo === 'ENVIANDO') {
     if (app.descarga) app.descarga.total = +kv.total;
   } else if (tipo === 'OK' && banderas[0] === 'ZANCADA') {
