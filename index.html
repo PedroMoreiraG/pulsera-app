@@ -1,3 +1,24 @@
+<!--
+  ============================================================================
+   PULSERA - APP WEB (se abre en Bluefy en el iPhone)
+  ============================================================================
+   Es UN solo archivo: HTML (estructura) + CSS (estilo) + JavaScript (logica).
+   No necesita servidor propio: GitHub Pages solo entrega este archivo.
+
+   Como leerlo:
+     1. <style>  : colores y diseno. Las variables --bg, --acc... definen la
+                   paleta; cambiarlas cambia toda la app.
+     2. <body>   : las 4 "pantallas" (section): Entrenar, Historial, Detalle
+                   y Ajustes. Solo se ve la que tiene la clase "sel".
+     3. <script> : la logica, en este orden:
+                   protocolo -> estado -> utilidades puras -> Bluetooth ->
+                   mensajes de la pulsera -> interfaz -> graficos -> eventos
+                   -> modo demo -> inicio.
+
+   Bluetooth desde una pagina web: se llama "Web Bluetooth". Safari no lo
+   tiene; Bluefy si. Por eso se abre ahi.
+  ============================================================================
+-->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -148,6 +169,8 @@
 
 <script>
 // ================== Protocolo (ver docs/protocolo-ble.md) ==================
+// Los mismos UUID que el firmware. Si no coinciden, la app no encuentra nada.
+// REG_BYTES = 14: el tamano del registro (struct Registro del firmware).
 const SRV  = '7a6e0001-5c1d-4b8a-9f3e-2b1c0d9e8f70';
 const CTRL = '7a6e0002-5c1d-4b8a-9f3e-2b1c0d9e8f70';
 const EST  = '7a6e0003-5c1d-4b8a-9f3e-2b1c0d9e8f70';
@@ -156,11 +179,20 @@ const DAT  = '7a6e0005-5c1d-4b8a-9f3e-2b1c0d9e8f70';
 const REG_BYTES = 14;
 const ACTIVIDADES = ['Fútbol', 'Running', 'Gym', 'CrossFit', 'HYROX'];
 
+// Atajos:
+//   $('id')      -> busca un elemento del HTML por su id
+//   dec / enc    -> convierten bytes <-> texto (los comandos viajan como bytes)
+//   DEMO         -> true si la direccion tiene "?demo": simula una pulsera
 const $ = id => document.getElementById(id);
 const dec = new TextDecoder(), enc = new TextEncoder();
 const DEMO = new URLSearchParams(location.search).has('demo');
 
 // ================== Estado ==================
+// ESTADO DE LA APP: todo lo que la app "sabe" en un momento dado, en un objeto.
+//   dev / ch      : el dispositivo Bluetooth y sus 4 caracteristicas
+//   tBase / tRef  : para el reloj en vivo. La pulsera avisa el tiempo cada 5 s;
+//                   entre avisos, la app suma el tiempo que paso localmente.
+//   descarga      : mientras se baja una sesion: {total, registros, ...}
 const app = {
   dev: null, ch: {}, conectado: false, grabando: false,
   actividad: guardado('pulsera.actividad', 'Fútbol'),
@@ -168,12 +200,26 @@ const app = {
   descarga: null,             // {total, registros: Map, reintentos}
   sesionActual: null,
 };
+// COLA BLE: Web Bluetooth no deja hacer dos operaciones a la vez (por ej.
+// leer y escribir al mismo tiempo da error "GATT operation in progress").
+// Encadenamos todas las operaciones en una sola fila de promesas.
 let colaBLE = Promise.resolve();
 
+// localStorage: almacenamiento del navegador que sobrevive al cerrar la app.
+// Ahi viven el historial de sesiones y la ultima actividad elegida.
+// El try/catch evita que la app se caiga si el navegador lo bloquea.
 function guardado(k, def) { try { return localStorage.getItem(k) ?? def; } catch { return def; } }
 function guardar(k, v) { try { localStorage.setItem(k, v); } catch {} }
 
 // ================== Utilidades de protocolo (puras, testeables) ==================
+// ================== UTILIDADES PURAS ==================
+// "Puras" = no tocan la pantalla ni el Bluetooth: reciben datos y devuelven
+// datos. Por eso son faciles de probar (las probamos con paquetes armados
+// exactamente como los arma el firmware).
+//
+// parsearEstado("OK;STOP;registros=15") ->
+//   { tipo: "OK", banderas: ["STOP"], kv: { registros: "15" } }
+// Lo que tiene "=" va a kv (clave/valor); lo que no, a banderas.
 function parsearEstado(txt) {
   const partes = txt.trim().split(';');
   const kv = {};
@@ -184,6 +230,7 @@ function parsearEstado(txt) {
   }
   return { tipo: partes[0], kv, banderas };
 }
+// "duracion_s=40\npasos=49\n..." -> { duracion_s: 40, pasos: 49, ... }
 function parsearResumen(txt) {
   const r = {};
   for (const l of txt.split('\n')) {
@@ -193,6 +240,12 @@ function parsearResumen(txt) {
   return r;
 }
 // Devuelve {fin:true,total} o {fin:false, registros:[[idx,[t,pasos,cad,velMs,acc]],...]}
+// Lee un paquete binario de DATOS. DataView permite leer numeros de un
+// buffer de bytes indicando el tipo y la posicion. El "true" significa
+// little-endian (el byte menos significativo primero), que es como guarda
+// los numeros el ESP32. Las posiciones dentro de cada registro (0, 2, 4, 6, 10)
+// son las mismas que en el struct del firmware.
+// Si el indice es 0xFFFF (65535) no es un paquete de datos: es el de FIN.
 function parsearPaquete(dv) {
   const idx = dv.getUint16(0, true);
   if (idx === 0xFFFF) return { fin: true, total: dv.getUint16(2, true) };
@@ -205,6 +258,7 @@ function parsearPaquete(dv) {
   }
   return { fin: false, registros: out };
 }
+// Devuelve la lista de indices que no llegaron (para pedirlos de nuevo).
 function faltantes(mapa, total) {
   const f = [];
   for (let i = 0; i < total; i++) if (!mapa.has(i)) f.push(i);
@@ -212,8 +266,14 @@ function faltantes(mapa, total) {
 }
 
 // ================== BLE ==================
+// ================== BLUETOOTH ==================
+// encolar: agrega una operacion al final de la fila (ver colaBLE arriba).
 function encolar(fn) { colaBLE = colaBLE.then(fn, fn); return colaBLE; }
 
+// Manda un comando de texto a CONTROL. "async/await" = esperar a que termine
+// una operacion lenta (como el Bluetooth) sin congelar la pantalla.
+// writeValueWithResponse pide confirmacion de que llego; si el navegador
+// no lo tiene, usamos writeValue (version vieja).
 async function enviar(cmd) {
   if (DEMO) return demoComando(cmd);
   if (!app.ch.ctrl) throw new Error('sin conexión');
@@ -224,6 +284,9 @@ async function enviar(cmd) {
 }
 async function leerTexto(ch) { const v = await encolar(() => ch.readValue()); return dec.decode(v); }
 
+// Abre el selector de dispositivos del navegador, mostrando solo los que
+// anuncian nuestro servicio o se llaman "Pulsera...". El navegador exige que
+// esto arranque con un toque del usuario (por seguridad), por eso va en un boton.
 async function conectar() {
   if (DEMO) return demoConectar();
   if (!navigator.bluetooth) { $('avisoBT').hidden = false; return; }
@@ -237,6 +300,11 @@ async function conectar() {
   }
 }
 
+// GATT = la "base de datos" de servicios y caracteristicas de la pulsera.
+// Nos conectamos, buscamos el servicio y las 4 caracteristicas, y nos
+// suscribimos (startNotifications) a ESTADO y DATOS: desde ahi, cada vez que
+// la pulsera notifica, el navegador dispara "characteristicvaluechanged" y
+// llamamos a alEstado / alPaquete.
 async function conectarGatt() {
   ui.conn('Conectando…');
   const gatt = await app.dev.gatt.connect();
@@ -254,6 +322,9 @@ async function conectarGatt() {
   alEstado(await leerTexto(app.ch.est));
 }
 
+// Si se corta la conexion (te alejaste, iOS la corto, etc.) intentamos
+// reconectar 5 veces, esperando cada vez un poco mas. Como la pulsera guarda
+// la sesion en su memoria, si estabas grabando no se pierde nada.
 async function alDesconectar() {
   app.conectado = false; app.ch = {};
   ui.conn(null);
@@ -266,6 +337,14 @@ async function alDesconectar() {
 }
 
 // ================== Mensajes de la pulsera ==================
+// ================== MENSAJES DE LA PULSERA ==================
+// Reacciona a cada texto de ESTADO. Es una "maquina de estados" simple:
+//   GRABANDO  -> actualiza reloj, metros y pasos en vivo
+//   OK;START  -> empezo la sesion (anota actividad y hora de inicio)
+//   OK;STOP   -> termino: arranca la descarga automatica
+//   LIBRE     -> en reposo (muestra la zancada guardada en la pulsera)
+//   ENVIANDO  -> la pulsera avisa cuantos registros va a mandar
+//   ERROR     -> muestra el error en un cartel (toast)
 function alEstado(txt) {
   const { tipo, kv, banderas } = parsearEstado(txt);
   if (tipo === 'GRABANDO') {
@@ -293,6 +372,8 @@ function alEstado(txt) {
   ui.estado();
 }
 
+// Despues de STOP: lee el RESUMEN, prepara el "balde" donde van a caer los
+// registros (un Map: indice -> registro) y pide GET.
 async function finalizarYDescargar() {
   ui.estado('Descargando sesión…');
   try {
@@ -303,6 +384,10 @@ async function finalizarYDescargar() {
   } catch (e) { toast('No se pudo descargar: ' + e.message); ui.barra(null); }
 }
 
+// Llega un paquete de DATOS. Si son registros, los guarda en el Map (si un
+// registro llega dos veces no importa: se pisa con el mismo valor). Si es el
+// paquete de FIN, revisa si falta alguno: si falta, pide "GET <primer faltante>"
+// (hasta 3 veces); si esta todo, guarda la sesion.
 function alPaquete(dv) {
   const d = app.descarga; if (!d) return;
   const p = parsearPaquete(dv);
@@ -317,6 +402,8 @@ function alPaquete(dv) {
   guardarSesion(d, f.length);
 }
 
+// Ordena los registros, pasa la velocidad de m/s a km/h, y guarda la sesion
+// al principio de la lista en localStorage. Despues abre su pantalla de detalle.
 function guardarSesion(d, perdidos) {
   const regs = [...d.registros.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]);
   const s = {
@@ -337,6 +424,10 @@ function guardarSesion(d, perdidos) {
 function cargarSesiones() { try { return JSON.parse(localStorage.getItem('pulsera.sesiones') || '[]'); } catch { return []; } }
 
 // ================== Interfaz ==================
+// ================== INTERFAZ ==================
+// Todas las funciones que tocan la pantalla, agrupadas en el objeto "ui".
+// Separar "logica" de "pantalla" hace que sea mas facil cambiar el diseno
+// sin romper el Bluetooth (y viceversa).
 const ui = {
   conn(nombre) {
     $('dot').className = 'dot' + (nombre && app.conectado ? (app.grabando ? ' rec' : ' on') : '');
@@ -397,11 +488,14 @@ const ui = {
   },
 };
 
+// Formatos: segundos -> "mm:ss" o "h:mm:ss"; metros -> "850 m" o "1,25 km".
 function fmtDur(s) { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; }
 function fmtDist(m) { m = m || 0; return m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m'; }
 function num(v, d = 1) { return (v ?? 0).toLocaleString('es-UY', { minimumFractionDigits: d, maximumFractionDigits: d }); }
 
+// Navegacion: muestra una seccion y oculta las demas (no hay "paginas" reales,
+// es todo el mismo archivo).
 function irA(v) {
   document.querySelectorAll('.vista').forEach(x => x.classList.toggle('sel', x.id === v));
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('sel', t.dataset.v === v || (v === 'vDetalle' && t.dataset.v === 'vHistorial')));
@@ -409,6 +503,9 @@ function irA(v) {
 }
 
 let detalleId = null;
+// Pantalla de detalle de una sesion: arma las tarjetas del resumen y dibuja
+// los dos graficos. Los textos se ponen con textContent (nunca con innerHTML
+// usando datos), una buena practica de seguridad.
 function abrirDetalle(id) {
   const s = cargarSesiones().find(x => x.id === id); if (!s) return;
   detalleId = id;
@@ -441,6 +538,10 @@ function abrirDetalle(id) {
   $('btnBorrar').textContent = 'Borrar';
 }
 
+// Dibuja un grafico de linea en un <canvas> a mano, sin librerias (menos
+// peso, carga instantanea). Pasos: ajustar a la resolucion de pantalla (dpr,
+// para que se vea nitido en Retina), lineas de guia, area con degradado,
+// linea, y un punto marcando el maximo.
 function grafico(cv, ys, color, marcarMax) {
   const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr;
@@ -466,6 +567,8 @@ function grafico(cv, ys, color, marcarMax) {
   }
 }
 
+// Exporta la sesion como CSV (se abre en Excel). En el iPhone usa el menu
+// "Compartir" del sistema; en una PC descarga el archivo.
 function exportarCsv() {
   const s = cargarSesiones().find(x => x.id === detalleId); if (!s) return;
   const csv = 't_s,pasos,cadencia,vel_kmh,acc_max\n' + s.registros.map(r => r.join(',')).join('\n');
@@ -475,6 +578,7 @@ function exportarCsv() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(archivo); a.download = nombre; a.click();
 }
 
+// Cartelito que aparece abajo unos segundos.
 function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('ver'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('ver'), 2600); }
 
 // Reloj en vivo
@@ -484,6 +588,8 @@ setInterval(() => {
 }, 250);
 
 // ================== Eventos ==================
+// ================== EVENTOS ==================
+// Conecta cada boton con lo que tiene que hacer.
 $('btnConn').onclick = () => { if (!app.conectado) conectar(); };
 $('btnRec').onclick = async () => {
   try {
@@ -507,6 +613,11 @@ $('btnBorrar').onclick = () => {
 };
 
 // ================== Modo demo (?demo) para probar sin pulsera ==================
+// ================== MODO DEMO ==================
+// Con "?demo" en la direccion, en vez de Bluetooth usa estas funciones, que
+// imitan a la pulsera: mismos mensajes de ESTADO y paquetes binarios armados
+// igual que el firmware. Sirve para probar la app sin la placa. Va 10 veces
+// mas rapido que la realidad.
 let demo = null;
 function demoConectar() {
   app.dev = { name: 'Pulsera-DEMO' }; app.conectado = true; ui.conn('Pulsera-DEMO');
@@ -552,6 +663,9 @@ function demoResumen() {
 }
 
 // ================== Inicio ==================
+// ================== INICIO ==================
+// Al cargar: avisa si no hay Bluetooth, dibuja los chips de actividad,
+// el estado y la lista de sesiones.
 if (!navigator.bluetooth && !DEMO) $('avisoBT').hidden = false;
 if (DEMO) toast('Modo demo: sin pulsera');
 ui.chips(); ui.estado(); ui.lista();
