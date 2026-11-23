@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>Pulsera</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14181d; --panel2:#1b2027; --line:#262c34;
+    --txt:#eef2f5; --mut:#8a96a3; --acc:#c6ff3d; --acc-ink:#11160a;
+    --warn:#ffb547; --bad:#ff5d5d; --r:18px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--txt)}
+  body{padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 90px)}
+  h1{font-size:22px;margin:4px 0 14px;letter-spacing:-.3px}
+  h2{font-size:15px;color:var(--mut);font-weight:600;margin:22px 0 10px;text-transform:uppercase;letter-spacing:.6px}
+  button{font:inherit;color:inherit;border:0;cursor:pointer}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:var(--panel);font-size:14px;color:var(--mut)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--mut)}
+  .dot.on{background:var(--acc);box-shadow:0 0 10px var(--acc)}
+  .dot.rec{background:var(--bad);box-shadow:0 0 10px var(--bad);animation:lat 1s infinite}
+  @keyframes lat{50%{opacity:.35}}
+  .card{background:var(--panel);border-radius:var(--r);padding:16px}
+  .btn{padding:14px 18px;border-radius:14px;background:var(--panel2);font-weight:600}
+  .btn.prim{background:var(--acc);color:var(--acc-ink)}
+  .btn.full{width:100%}
+  .btn:disabled{opacity:.4}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{padding:10px 14px;border-radius:999px;background:var(--panel2);font-size:15px;color:var(--mut)}
+  .chip.sel{background:var(--acc);color:var(--acc-ink);font-weight:600}
+  .big{display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 16px}
+  .reloj{font-size:58px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-1px}
+  .recbtn{width:170px;height:170px;border-radius:50%;font-size:22px;font-weight:800;background:var(--acc);color:var(--acc-ink);box-shadow:0 0 0 8px #c6ff3d22}
+  .recbtn.stop{background:var(--bad);color:#fff;box-shadow:0 0 0 8px #ff5d5d22}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:100%}
+  .stat{background:var(--panel2);border-radius:14px;padding:12px}
+  .stat .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .u{font-size:13px;color:var(--mut);margin-left:3px}
+  .stat .k{font-size:12px;color:var(--mut);margin-top:2px}
+  .stat.dest{background:#c6ff3d14;outline:1px solid #c6ff3d55}
+  .stat.dest .v{color:var(--acc)}
+  .mut{color:var(--mut);font-size:14px}
+  .aviso{background:#ffb5471a;color:var(--warn);border-radius:14px;padding:12px 14px;font-size:14px;margin-bottom:12px}
+  .lista{display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border-radius:14px;padding:14px;text-align:left;width:100%}
+  .item .t{font-weight:600}
+  .item .s{font-size:13px;color:var(--mut);margin-top:3px}
+  .item .d{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  canvas{width:100%;height:170px;display:block}
+  .tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0b0d10ee;backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:8px 8px calc(env(safe-area-inset-bottom) + 8px)}
+  .tab{flex:1;padding:10px;border-radius:12px;font-size:14px;color:var(--mut);background:transparent}
+  .tab.sel{color:var(--acc);background:#c6ff3d12}
+  .vista{display:none}.vista.sel{display:block}
+  .fila{display:flex;gap:10px;align-items:center}
+  input[type=number]{font:inherit;font-size:18px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:12px;width:110px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 84px);background:#222a33;color:var(--txt);padding:12px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;max-width:90%}
+  .toast.ver{opacity:1}
+  .barra{height:6px;background:var(--panel2);border-radius:6px;overflow:hidden;width:100%}
+  .barra i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+  .volver{background:none;color:var(--acc);padding:6px 0;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Pulsera</h1>
+  <button class="pill" id="btnConn"><span class="dot" id="dot"></span><span id="txtConn">Conectar</span></button>
+</div>
+
+<div class="aviso" id="avisoBT" hidden>
+  Este navegador no tiene Bluetooth. En iPhone abrí esta página con <b>Bluefy</b> (gratis en la App Store).
+</div>
+
+<!-- ============ ENTRENAR ============ -->
+<section class="vista sel" id="vEntrenar">
+  <div id="elegirAct">
+    <h2>Actividad</h2>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="card big" style="margin-top:16px">
+    <div class="mut" id="lblEstado">Conectá la pulsera para empezar</div>
+    <div class="reloj" id="reloj">00:00</div>
+    <div class="grid3">
+      <div class="stat"><div class="v" id="liveDist">0</div><div class="k">metros</div></div>
+      <div class="stat"><div class="v" id="livePasos">0</div><div class="k">pasos</div></div>
+      <div class="stat"><div class="v" id="liveRitmo">–</div><div class="k">pasos/min</div></div>
+    </div>
+    <button class="recbtn" id="btnRec" disabled>INICIAR</button>
+    <div class="barra" id="barra" hidden><i id="barraI"></i></div>
+  </div>
+</section>
+
+<!-- ============ HISTORIAL ============ -->
+<section class="vista" id="vHistorial">
+  <h2>Sesiones</h2>
+  <div class="lista" id="lista"></div>
+  <p class="mut" id="sinSesiones">Todavía no hay sesiones guardadas.</p>
+</section>
+
+<!-- ============ DETALLE ============ -->
+<section class="vista" id="vDetalle">
+  <button class="volver" id="btnVolver">‹ Sesiones</button>
+  <h1 id="detTitulo"></h1>
+  <div class="mut" id="detFecha"></div>
+  <h2>Resumen</h2>
+  <div class="grid" id="detStats"></div>
+  <h2>Velocidad (km/h)</h2>
+  <div class="card"><canvas id="cVel"></canvas></div>
+  <h2>Intensidad (aceleración, m/s²)</h2>
+  <div class="card"><canvas id="cAcc"></canvas></div>
+  <div class="fila" style="margin-top:16px">
+    <button class="btn" id="btnCsv">Exportar CSV</button>
+    <button class="btn" id="btnBorrar" style="color:var(--bad)">Borrar</button>
+  </div>
+</section>
+
+<!-- ============ AJUSTES ============ -->
+<section class="vista" id="vAjustes">
+  <h2>Largo de paso</h2>
+  <div class="card">
+    <p class="mut" style="margin-top:0">Metros por paso caminando. Corriendo, la pulsera lo multiplica por 1,3. Para calibrarlo: caminá 100 pasos contados y dividí la distancia por 100.</p>
+    <div class="fila">
+      <input type="number" id="inZancada" step="0.01" min="0.3" max="2" value="0.70">
+      <button class="btn prim" id="btnZancada">Guardar en la pulsera</button>
+    </div>
+  </div>
+  <h2>Pulsera</h2>
+  <div class="card">
+    <div class="mut" id="infoPulsera">Sin conectar</div>
+  </div>
+  <h2>Acerca de</h2>
+  <p class="mut">Distancia y velocidad estimadas con pasos × largo de paso. Con el GPS (etapa 2) pasan a ser medidas.</p>
+</section>
+
+<nav class="tabs">
+  <button class="tab sel" data-v="vEntrenar">Entrenar</button>
+  <button class="tab" data-v="vHistorial">Historial</button>
+  <button class="tab" data-v="vAjustes">Ajustes</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================== Protocolo (ver docs/protocolo-ble.md) ==================
+const SRV  = '7a6e0001-5c1d-4b8a-9f3e-2b1c0d9e8f70';
+const CTRL = '7a6e0002-5c1d-4b8a-9f3e-2b1c0d9e8f70';
+const EST  = '7a6e0003-5c1d-4b8a-9f3e-2b1c0d9e8f70';
+const RES  = '7a6e0004-5c1d-4b8a-9f3e-2b1c0d9e8f70';
+const DAT  = '7a6e0005-5c1d-4b8a-9f3e-2b1c0d9e8f70';
+const REG_BYTES = 14;
+const ACTIVIDADES = ['Fútbol', 'Running', 'Gym', 'CrossFit', 'HYROX'];
+
+const $ = id => document.getElementById(id);
+const dec = new TextDecoder(), enc = new TextEncoder();
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+// ================== Estado ==================
+const app = {
+  dev: null, ch: {}, conectado: false, grabando: false,
+  actividad: guardado('pulsera.actividad', 'Fútbol'),
+  tBase: 0, tRef: 0,          // reloj en vivo: t de la pulsera + tiempo local desde la última noticia
+  descarga: null,             // {total, registros: Map, reintentos}
+  sesionActual: null,
+};
+let colaBLE = Promise.resolve();
+
+function guardado(k, def) { try { return localStorage.getItem(k) ?? def; } catch { return def; } }
+function guardar(k, v) { try { localStorage.setItem(k, v); } catch {} }
+
+// ================== Utilidades de protocolo (puras, testeables) ==================
+function parsearEstado(txt) {
+  const partes = txt.trim().split(';');
+  const kv = {};
+  const banderas = [];
+  for (const p of partes.slice(1)) {
+    const i = p.indexOf('=');
+    if (i > 0) kv[p.slice(0, i)] = p.slice(i + 1); else banderas.push(p);
+  }
+  return { tipo: partes[0], kv, banderas };
+}
+function parsearResumen(txt) {
+  const r = {};
+  for (const l of txt.split('\n')) {
+    const i = l.indexOf('=');
+    if (i > 0) r[l.slice(0, i).trim()] = parseFloat(l.slice(i + 1));
+  }
+  return r;
+}
+// Devuelve {fin:true,total} o {fin:false, registros:[[idx,[t,pasos,cad,velMs,acc]],...]}
+function parsearPaquete(dv) {
+  const idx = dv.getUint16(0, true);
+  if (idx === 0xFFFF) return { fin: true, total: dv.getUint16(2, true) };
+  const out = [];
+  const n = Math.floor((dv.byteLength - 2) / REG_BYTES);
+  for (let k = 0; k < n; k++) {
+    const o = 2 + k * REG_BYTES;
+    out.push([idx + k, [dv.getUint16(o, true), dv.getUint16(o + 2, true), dv.getUint16(o + 4, true),
+                        dv.getFloat32(o + 6, true), dv.getFloat32(o + 10, true)]]);
+  }
+  return { fin: false, registros: out };
+}
+function faltantes(mapa, total) {
+  const f = [];
+  for (let i = 0; i < total; i++) if (!mapa.has(i)) f.push(i);
+  return f;
+}
+
+// ================== BLE ==================
+function encolar(fn) { colaBLE = colaBLE.then(fn, fn); return colaBLE; }
+
+async function enviar(cmd) {
+  if (DEMO) return demoComando(cmd);
+  if (!app.ch.ctrl) throw new Error('sin conexión');
+  return encolar(() => {
+    const data = enc.encode(cmd);
+    return app.ch.ctrl.writeValueWithResponse ? app.ch.ctrl.writeValueWithResponse(data) : app.ch.ctrl.writeValue(data);
+  });
+}
+async function leerTexto(ch) { const v = await encolar(() => ch.readValue()); return dec.decode(v); }
+
+async function conectar() {
+  if (DEMO) return demoConectar();
+  if (!navigator.bluetooth) { $('avisoBT').hidden = false; return; }
+  try {
+    app.dev = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SRV] }, { namePrefix: 'Pulsera' }], optionalServices: [SRV] });
+    app.dev.addEventListener('gattserverdisconnected', alDesconectar);
+    await conectarGatt();
+  } catch (e) {
+    if (e.name !== 'NotFoundError') toast('No se pudo conectar: ' + e.message);
+  }
+}
+
+async function conectarGatt() {
+  ui.conn('Conectando…');
+  const gatt = await app.dev.gatt.connect();
+  const srv = await gatt.getPrimaryService(SRV);
+  app.ch.ctrl = await srv.getCharacteristic(CTRL);
+  app.ch.est  = await srv.getCharacteristic(EST);
+  app.ch.res  = await srv.getCharacteristic(RES);
+  app.ch.dat  = await srv.getCharacteristic(DAT);
+  app.ch.est.addEventListener('characteristicvaluechanged', e => alEstado(dec.decode(e.target.value)));
+  app.ch.dat.addEventListener('characteristicvaluechanged', e => alPaquete(e.target.value));
+  await encolar(() => app.ch.est.startNotifications());
+  await encolar(() => app.ch.dat.startNotifications());
+  app.conectado = true;
+  ui.conn(app.dev.name || 'Pulsera');
+  alEstado(await leerTexto(app.ch.est));
+}
+
+async function alDesconectar() {
+  app.conectado = false; app.ch = {};
+  ui.conn(null);
+  if (app.descarga) { app.descarga = null; ui.barra(null); }
+  // Reintento automático: si estaba grabando, la pulsera sigue grabando sola
+  for (let i = 0; i < 5 && app.dev && !app.conectado; i++) {
+    await new Promise(r => setTimeout(r, 2000 + i * 1500));
+    try { await conectarGatt(); toast('Reconectada'); } catch {}
+  }
+}
+
+// ================== Mensajes de la pulsera ==================
+function alEstado(txt) {
+  const { tipo, kv, banderas } = parsearEstado(txt);
+  if (tipo === 'GRABANDO') {
+    app.grabando = true;
+    app.tBase = +kv.t || 0; app.tRef = performance.now();
+    ui.vivo(+kv.dist || 0, +kv.pasos || 0);
+  } else if (tipo === 'OK' && banderas[0] === 'START') {
+    app.grabando = true; app.tBase = 0; app.tRef = performance.now();
+    app.sesionActual = { actividad: app.actividad, inicio: new Date().toISOString() };
+    ui.vivo(0, 0); app.pasosPrev = [];
+  } else if (tipo === 'OK' && banderas[0] === 'STOP') {
+    app.grabando = false;
+    finalizarYDescargar();
+  } else if (tipo === 'LIBRE') {
+    app.grabando = false;
+    if (kv.zancada) $('inZancada').value = kv.zancada;
+    $('infoPulsera').textContent = `${app.dev?.name || 'Pulsera'} · sesión guardada: ${kv.registros || 0} s · paso ${kv.zancada} m`;
+  } else if (tipo === 'ENVIANDO') {
+    if (app.descarga) app.descarga.total = +kv.total;
+  } else if (tipo === 'OK' && banderas[0] === 'ZANCADA') {
+    toast('Largo de paso guardado: ' + banderas[1] + ' m');
+  } else if (tipo === 'ERROR') {
+    toast('Pulsera: ' + (banderas[0] || 'error'));
+  }
+  ui.estado();
+}
+
+async function finalizarYDescargar() {
+  ui.estado('Descargando sesión…');
+  try {
+    const resumen = parsearResumen(await (DEMO ? demoResumen() : leerTexto(app.ch.res)));
+    app.descarga = { total: null, registros: new Map(), reintentos: 0, resumen };
+    ui.barra(0);
+    await enviar('GET');
+  } catch (e) { toast('No se pudo descargar: ' + e.message); ui.barra(null); }
+}
+
+function alPaquete(dv) {
+  const d = app.descarga; if (!d) return;
+  const p = parsearPaquete(dv);
+  if (!p.fin) {
+    for (const [i, r] of p.registros) d.registros.set(i, r);
+    if (d.total) ui.barra(d.registros.size / d.total);
+    return;
+  }
+  d.total = p.total;
+  const f = faltantes(d.registros, d.total);
+  if (f.length && d.reintentos < 3) { d.reintentos++; enviar('GET ' + f[0]); return; }
+  guardarSesion(d, f.length);
+}
+
+function guardarSesion(d, perdidos) {
+  const regs = [...d.registros.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]);
+  const s = {
+    id: Date.now(),
+    actividad: app.sesionActual?.actividad || app.actividad,
+    inicio: app.sesionActual?.inicio || new Date(Date.now() - (d.resumen.duracion_s || 0) * 1000).toISOString(),
+    resumen: d.resumen,
+    registros: regs.map(r => [r[0], r[1], r[2], +(r[3] * 3.6).toFixed(2), +r[4].toFixed(2)]),
+  };
+  const todas = cargarSesiones(); todas.unshift(s);
+  try { localStorage.setItem('pulsera.sesiones', JSON.stringify(todas)); }
+  catch { toast('Memoria del navegador llena: exportá y borrá sesiones viejas'); }
+  app.descarga = null; app.sesionActual = null;
+  ui.barra(null); ui.estado(); ui.lista();
+  if (perdidos) toast(`Sesión guardada (faltaron ${perdidos} s)`);
+  abrirDetalle(s.id);
+}
+function cargarSesiones() { try { return JSON.parse(localStorage.getItem('pulsera.sesiones') || '[]'); } catch { return []; } }
+
+// ================== Interfaz ==================
+const ui = {
+  conn(nombre) {
+    $('dot').className = 'dot' + (nombre && app.conectado ? (app.grabando ? ' rec' : ' on') : '');
+    $('txtConn').textContent = nombre || 'Conectar';
+    ui.estado();
+  },
+  estado(msg) {
+    const b = $('btnRec');
+    b.disabled = !app.conectado || !!app.descarga;
+    b.textContent = app.grabando ? 'FINALIZAR' : 'INICIAR';
+    b.classList.toggle('stop', app.grabando);
+    $('dot').className = 'dot' + (app.conectado ? (app.grabando ? ' rec' : ' on') : '');
+    $('elegirAct').style.opacity = app.grabando ? .4 : 1;
+    $('lblEstado').textContent = msg || (!app.conectado ? 'Conectá la pulsera para empezar'
+      : app.descarga ? 'Descargando sesión…'
+      : app.grabando ? `Grabando · ${app.sesionActual?.actividad || app.actividad}`
+      : 'Lista');
+  },
+  vivo(dist, pasos) {
+    $('liveDist').textContent = Math.round(dist);
+    $('livePasos').textContent = pasos;
+    // ritmo con las dos últimas noticias (cada 5 s)
+    const ahora = app.tBase;
+    app.pasosPrev = (app.pasosPrev || []).filter(x => ahora - x[0] <= 15);
+    app.pasosPrev.push([ahora, pasos]);
+    const a = app.pasosPrev[0];
+    $('liveRitmo').textContent = ahora > a[0] ? Math.round((pasos - a[1]) * 60 / (ahora - a[0])) : '–';
+  },
+  barra(f) {
+    $('barra').hidden = f == null;
+    if (f != null) $('barraI').style.width = Math.round(Math.min(1, f) * 100) + '%';
+  },
+  chips() {
+    $('chips').innerHTML = '';
+    for (const a of ACTIVIDADES) {
+      const c = document.createElement('button');
+      c.className = 'chip' + (a === app.actividad ? ' sel' : '');
+      c.textContent = a;
+      c.onclick = () => { if (app.grabando) return; app.actividad = a; guardar('pulsera.actividad', a); ui.chips(); };
+      $('chips').append(c);
+    }
+  },
+  lista() {
+    const ss = cargarSesiones();
+    $('sinSesiones').hidden = ss.length > 0;
+    $('lista').innerHTML = '';
+    for (const s of ss) {
+      const b = document.createElement('button');
+      b.className = 'item';
+      const f = new Date(s.inicio);
+      b.innerHTML = `<div><div class="t"></div><div class="s"></div></div><div class="d"></div>`;
+      b.querySelector('.t').textContent = s.actividad;
+      b.querySelector('.s').textContent = f.toLocaleDateString('es-UY', { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' + f.toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' }) + ' · ' + fmtDur(s.resumen.duracion_s);
+      b.querySelector('.d').textContent = fmtDist(s.resumen.distancia_m);
+      b.onclick = () => abrirDetalle(s.id);
+      $('lista').append(b);
+    }
+  },
+};
+
+function fmtDur(s) { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; }
+function fmtDist(m) { m = m || 0; return m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m'; }
+function num(v, d = 1) { return (v ?? 0).toLocaleString('es-UY', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+
+function irA(v) {
+  document.querySelectorAll('.vista').forEach(x => x.classList.toggle('sel', x.id === v));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('sel', t.dataset.v === v || (v === 'vDetalle' && t.dataset.v === 'vHistorial')));
+  window.scrollTo(0, 0);
+}
+
+let detalleId = null;
+function abrirDetalle(id) {
+  const s = cargarSesiones().find(x => x.id === id); if (!s) return;
+  detalleId = id;
+  const r = s.resumen, f = new Date(s.inicio);
+  $('detTitulo').textContent = s.actividad;
+  $('detFecha').textContent = f.toLocaleString('es-UY', { dateStyle: 'full', timeStyle: 'short' });
+  const stats = [
+    ['Distancia', fmtDist(r.distancia_m), '', true],
+    ['Duración', fmtDur(r.duracion_s), '', true],
+    ['Vel. máxima', num(r.vel_max_kmh), 'km/h', true],
+    ['Vel. media', num(r.vel_media_kmh), 'km/h'],
+    ['Pasos', Math.round(r.pasos || 0), ''],
+    ['Cadencia media', Math.round(r.cadencia_media || 0), 'p/min'],
+    ['Aceleraciones fuertes', Math.round(r.acc_fuertes || 0), ''],
+    ['Pico de aceleración', num(r.acc_pico_ms2), 'm/s²'],
+  ];
+  $('detStats').innerHTML = '';
+  for (const [k, v, u, dest] of stats) {
+    const d = document.createElement('div');
+    d.className = 'stat' + (dest ? ' dest' : '');
+    d.innerHTML = '<div><span class="v"></span><span class="u"></span></div><div class="k"></div>';
+    d.querySelector('.v').textContent = v; d.querySelector('.u').textContent = u; d.querySelector('.k').textContent = k;
+    $('detStats').append(d);
+  }
+  irA('vDetalle');
+  requestAnimationFrame(() => {
+    grafico($('cVel'), s.registros.map(x => x[3]), '#c6ff3d', true);
+    grafico($('cAcc'), s.registros.map(x => x[4]), '#7cc4ff', false);
+  });
+  $('btnBorrar').textContent = 'Borrar';
+}
+
+function grafico(cv, ys, color, marcarMax) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  if (ys.length < 2) { g.fillStyle = '#8a96a3'; g.font = '14px sans-serif'; g.fillText('Sin datos suficientes', 8, H / 2); return; }
+  const pad = { l: 30, r: 8, t: 10, b: 20 };
+  const max = Math.max(1, ...ys) * 1.1, n = ys.length;
+  const X = i => pad.l + (W - pad.l - pad.r) * i / (n - 1);
+  const Y = v => H - pad.b - (H - pad.t - pad.b) * v / max;
+  g.strokeStyle = '#262c34'; g.fillStyle = '#8a96a3'; g.font = '11px sans-serif'; g.lineWidth = 1;
+  for (let k = 0; k <= 3; k++) { const v = max * k / 3, y = Y(v); g.beginPath(); g.moveTo(pad.l, y); g.lineTo(W - pad.r, y); g.stroke(); g.fillText(v.toFixed(v < 10 ? 1 : 0), 2, y + 4); }
+  g.fillText('0', pad.l, H - 4); const fin = fmtDur(n); g.fillText(fin, W - pad.r - g.measureText(fin).width, H - 4);
+  const grad = g.createLinearGradient(0, pad.t, 0, H - pad.b); grad.addColorStop(0, color + '55'); grad.addColorStop(1, color + '00');
+  g.beginPath(); g.moveTo(X(0), Y(ys[0])); ys.forEach((v, i) => g.lineTo(X(i), Y(v)));
+  g.lineTo(X(n - 1), H - pad.b); g.lineTo(X(0), H - pad.b); g.closePath(); g.fillStyle = grad; g.fill();
+  g.beginPath(); g.moveTo(X(0), Y(ys[0])); ys.forEach((v, i) => g.lineTo(X(i), Y(v)));
+  g.strokeStyle = color; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+  if (marcarMax) {
+    const im = ys.indexOf(Math.max(...ys));
+    g.fillStyle = color; g.beginPath(); g.arc(X(im), Y(ys[im]), 4, 0, 7); g.fill();
+    const t = num(ys[im]) + ' km/h'; const tx = Math.min(Math.max(X(im) - g.measureText(t).width / 2, pad.l), W - pad.r - g.measureText(t).width);
+    g.fillStyle = '#eef2f5'; g.fillText(t, tx, Math.max(Y(ys[im]) - 8, 12));
+  }
+}
+
+function exportarCsv() {
+  const s = cargarSesiones().find(x => x.id === detalleId); if (!s) return;
+  const csv = 't_s,pasos,cadencia,vel_kmh,acc_max\n' + s.registros.map(r => r.join(',')).join('\n');
+  const nombre = `pulsera_${s.actividad}_${s.inicio.slice(0, 16).replace(/[:T]/g, '-')}.csv`;
+  const archivo = new File([csv], nombre, { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [archivo] })) { navigator.share({ files: [archivo] }).catch(() => {}); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(archivo); a.download = nombre; a.click();
+}
+
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('ver'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('ver'), 2600); }
+
+// Reloj en vivo
+setInterval(() => {
+  if (!app.grabando) return;
+  $('reloj').textContent = fmtDur(app.tBase + (performance.now() - app.tRef) / 1000);
+}, 250);
+
+// ================== Eventos ==================
+$('btnConn').onclick = () => { if (!app.conectado) conectar(); };
+$('btnRec').onclick = async () => {
+  try {
+    if (!app.grabando) { $('reloj').textContent = '00:00'; await enviar('START'); }
+    else await enviar('STOP');
+  } catch (e) { toast('Error: ' + e.message); }
+};
+$('btnZancada').onclick = async () => {
+  const z = parseFloat($('inZancada').value);
+  if (!(z >= 0.3 && z <= 2)) return toast('Entre 0,30 y 2,00 m');
+  try { await enviar('ZANCADA ' + z.toFixed(2)); } catch { toast('Conectá la pulsera primero'); }
+};
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => { irA(t.dataset.v); if (t.dataset.v === 'vHistorial') ui.lista(); });
+$('btnVolver').onclick = () => { irA('vHistorial'); ui.lista(); };
+$('btnCsv').onclick = exportarCsv;
+$('btnBorrar').onclick = () => {
+  const b = $('btnBorrar');
+  if (b.textContent === 'Borrar') { b.textContent = '¿Seguro? Tocá de nuevo'; return; }
+  guardar('pulsera.sesiones', JSON.stringify(cargarSesiones().filter(x => x.id !== detalleId)));
+  irA('vHistorial'); ui.lista();
+};
+
+// ================== Modo demo (?demo) para probar sin pulsera ==================
+let demo = null;
+function demoConectar() {
+  app.dev = { name: 'Pulsera-DEMO' }; app.conectado = true; ui.conn('Pulsera-DEMO');
+  alEstado('LIBRE;registros=0;zancada=0.70');
+}
+function demoComando(cmd) {
+  if (cmd === 'START') {
+    demo = { t: 0, pasos: 0, regs: [] };
+    alEstado('OK;START');
+    demo.timer = setInterval(() => {
+      demo.t++;
+      const correr = (demo.t % 40) > 25, cad = correr ? 165 : 110 + Math.random() * 10;
+      demo.pasos += Math.round(cad / 60 + Math.random() * .6);
+      const vel = cad / 60 * 0.7 * (correr ? 1.3 : 1);
+      demo.regs.push([demo.t, demo.pasos, Math.round(cad), vel + Math.random() * .3, (correr ? 6 : 2) + Math.random() * 3]);
+      if (demo.t % 5 === 0) alEstado(`GRABANDO;t=${demo.t};pasos=${demo.pasos};dist=${(demo.pasos * 0.75).toFixed(1)}`);
+    }, 100);   // 10x más rápido que la realidad
+  } else if (cmd === 'STOP') {
+    clearInterval(demo.timer); alEstado('OK;STOP;registros=' + demo.t);
+  } else if (cmd.startsWith('GET')) {
+    const desde = +(cmd.split(' ')[1] || 0);
+    alEstado(`ENVIANDO;total=${demo.regs.length};desde=${desde}`);
+    let i = desde;
+    const iv = setInterval(() => {
+      if (i >= demo.regs.length) {
+        const b = new DataView(new ArrayBuffer(4)); b.setUint16(0, 0xFFFF, true); b.setUint16(2, demo.regs.length, true);
+        clearInterval(iv); alPaquete(b); alEstado('ENVIO_OK;total=' + demo.regs.length); return;
+      }
+      const n = Math.min(12, demo.regs.length - i), dv = new DataView(new ArrayBuffer(2 + n * REG_BYTES));
+      dv.setUint16(0, i, true);
+      for (let k = 0; k < n; k++) { const r = demo.regs[i + k], o = 2 + k * REG_BYTES;
+        dv.setUint16(o, r[0], true); dv.setUint16(o + 2, r[1], true); dv.setUint16(o + 4, r[2], true);
+        dv.setFloat32(o + 6, r[3], true); dv.setFloat32(o + 10, r[4], true); }
+      i += n; alPaquete(dv);
+    }, 20);
+  } else if (cmd.startsWith('ZANCADA')) alEstado('OK;ZANCADA;' + cmd.split(' ')[1]);
+  return Promise.resolve();
+}
+function demoResumen() {
+  const r = demo.regs, d = r.length, pasos = demo.pasos, dist = pasos * 0.75;
+  const vmax = Math.max(...r.map(x => x[3]));
+  return Promise.resolve(`duracion_s=${d}\npasos=${pasos}\ndistancia_m=${dist.toFixed(1)}\nvel_media_kmh=${(dist / d * 3.6).toFixed(2)}\nvel_max_kmh=${(vmax * 3.6).toFixed(2)}\ncadencia_media=${Math.round(pasos / d * 60)}\ncadencia_max=165\nacc_pico_ms2=${Math.max(...r.map(x => x[4])).toFixed(2)}\nacc_fuertes=${r.filter(x => x[4] > 6).length}\nzancada_m=0.70\n`);
+}
+
+// ================== Inicio ==================
+if (!navigator.bluetooth && !DEMO) $('avisoBT').hidden = false;
+if (DEMO) toast('Modo demo: sin pulsera');
+ui.chips(); ui.estado(); ui.lista();
+// Exponer funciones puras para tests
+window.__pulsera = { parsearEstado, parsearResumen, parsearPaquete, faltantes };
+</script>
+</body>
+</html>
